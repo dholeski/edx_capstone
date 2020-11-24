@@ -1,0 +1,217 @@
+#load packages
+library(tidyverse)
+library(data.table)
+library(caret)
+library(knitr)
+library(stringr)
+library(latexpdf)
+library(tinytex)
+
+#Download the data and create train/test sets as per course instructions.
+
+##########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
+
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(data.table)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 3.6 or earlier:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+# if using R 4.0 or later:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+
+
+######## Start analysis ########
+
+
+#average rating of edx ratings
+mu <- mean(edx$rating)
+
+#RMSE of average only
+avgonly <- RMSE(validation$rating,mu)
+
+#create RMSE table
+RMSEs <- data.frame(model = "avg_only", RMSE = avgonly)
+
+#movie average rating
+movie_avg <- edx %>% 
+  group_by(movieId) %>% 
+  summarize(bi = mean(rating - mu),n_mov_rat = n())
+
+
+#extract movie release year
+movie_yr <- edx %>%
+  group_by(movieId) %>%
+  summarize(year = as.factor(str_sub(first(title),-5,-2)))
+
+#predict movie effect
+pred_moveffect <- mu + validation %>% 
+  left_join(movie_avg, by = 'movieId') %>%
+  .$bi
+
+
+#movie only RMSE
+mov_only_model <- RMSE(pred_moveffect, validation$rating)
+
+#add movie only RMSE to RMSE table
+RMSEs <- bind_rows(RMSEs, data.frame(model = "movie_effect", RMSE = mov_only_model))
+
+#user average
+usr_avg <- edx %>% 
+  left_join(movie_avg, by = 'movieId') %>%
+  group_by(userId) %>%
+  summarize(bu = mean(rating - mu - bi),n_usr_rat = n())
+
+
+
+#movie and user prediction
+pred_usrmov <- validation %>% 
+  left_join(movie_avg, by = 'movieId') %>%
+  left_join(usr_avg, by = 'userId') %>%
+  mutate(predicted = mu + bi + bu) %>%
+    .$predicted
+
+#movie& user RMSE
+mov_usr_model <- RMSE(pred_usrmov, validation$rating)
+
+
+#add movie & user to RMSE table
+RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr", RMSE = mov_usr_model ))
+
+
+#movie and usr average with tuning parameter, "lambda".
+#started with larger lambas and narrowed it down to improve RMSE.
+#lmds <- seq(0,12, .5)
+lmds <- seq(2,6, .25)
+
+tuned_rmses <- sapply(lmds, function(l) {
+  
+  bi_l <- 
+    edx %>%
+    group_by(movieId) %>%
+    summarize(biL = sum(rating - mu)/(n()+l))
+  
+  bu_l <- edx %>%
+  left_join(bi_l, by = 'movieId') %>% 
+  group_by(userId) %>%
+  summarize(buL = sum(rating - mu - biL)/(n()+l))
+
+preds_usrmov <- validation %>% 
+  left_join(bi_l, by = 'movieId') %>%
+  left_join(bu_l, by = 'userId') %>%
+  mutate(predicted = mu + biL + buL) %>%
+  .$predicted
+
+
+return(RMSE(preds_usrmov, validation$rating))
+})
+
+qplot(lmds,tuned_rmses)
+
+#tuned rmse model with lowest lamda
+usr_mov_lambda_model <- tuned_rmses[which.min(lmds)]
+
+#add lamba model to RMSE comparison table
+RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
+
+#analyze number of ratings per user
+usr_rating_cnt <-edx %>% 
+  group_by(userId) %>%
+  summarize(user_ratings = n())
+
+#analyze percentiles of rating counts per user
+quantile(usr_rating_cnt$user_ratings)
+
+#visualize the distribution of the rating counts per user, removing outliers (100th percentile)
+usr_rating_cnt %>% ggplot(aes(user_ratings)) + geom_histogram(binwidth = 10) +  xlim(0,quantile(usr_rating_cnt$user_ratings,.99))
+
+#visualize the distribution of number of records per year the movie was rated
+edx %>% mutate(year_rated = format(as.POSIXct(.$timestamp,origin = "1970-01-01",tz = "UTC"),"%Y")) %>% ggplot(aes(year_rated)) + geom_histogram(stat = "count") 
+
+#rating aggregated by movie year
+movie_yr_avg <- edx %>%
+  left_join(movie_avg, by = 'movieId') %>%
+  left_join(usr_avg, by = 'userId') %>% 
+  left_join(movie_yr, by = 'movieId') %>% 
+  group_by(year) %>%
+  summarize(bt = mean(rating - mu - bi - bu))
+
+
+#movie, year, and user prediction
+pred_yrmovusr <- validation %>% 
+  mutate(year = as.factor(str_sub(first(title), -5, -2))) %>%
+  left_join(movie_avg, by = 'movieId') %>%
+  left_join(usr_avg, by = 'userId') %>%
+  left_join(movie_yr_avg, by = 'year') %>% 
+  mutate(preds = mu + bi + bu + bt) %>%
+  .$preds
+
+
+#movie, user, and year RMSE
+mov_usr_yr_model <- RMSE(pred_yrmovusr, validation$rating)
+
+#update RMSE table
+RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+year", RMSE = mov_usr_yr_model ))
+
+#make an aesthetically pleasing table
+RMSE_kable <- knitr::kable(RMSEs)
+
+
+RMSE_kable
+
+
+RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5) 
+
+# mov_lm <- lm(rating ~ userId + movieId + timestamp , data = edx)
+# 
+# vali_lm_rmse <- RMSE(obs = validation$rating,  pred = predict(mov_lm,validation))
+# 
+# mov_glm <- glm(rating ~ userId + movieId + timestamp , data = edx)
+# 
+# vali_glm_rmse <- RMSE(obs = validation$rating,  pred = predict(mov_glm,validation))
