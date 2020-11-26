@@ -1,8 +1,12 @@
 data("zip_code_db")
+data("state.x77")
+data("state_codes")
 
 airbnb <- Arbnb_dt %>% group_by(host_id) %>% mutate(num_host_props = n()) %>%  ungroup() %>% group_by(neighbourhood) %>% mutate(num_props_group = n()) %>%  ungroup() %>% mutate(calc_check = ifelse(calculated_host_listings_count == num_host_props,TRUE,FALSE),last_review = lubridate::parse_date_time(last_review,orders = "dmy"))
 
 # zip_code_db <- zip_code_db %>% filter(zipcode_type == "Standard")
+
+zip_code_db$state <- sub('.*,\\s*', '', zip_code_db$post_office_city)
 
 zipdata_bnb <-  subset(zip_code_db,major_city %in% airbnb$city) 
 
@@ -23,14 +27,10 @@ write_labelled_xlsx(zipdata_bnb,file = "C:\\Users\\Dennis\\Desktop\\edx_capstone
 # longitude -- larger west to smaller east
 # latitude -- larger north to smaller south
 
-lim_abnb <- airbnb[1:100,]
+boundzips <- USAboundaries::us_zipcodes()
 
-lat <- 32.6000
-long <- -85.2000
+boundzips2 <- boundzips %>% unnest_wider(geometry)
 
-
-zpdf <- as.data.frame(zipdata_bnb)
-abdf <- as.data.frame(airbnb)
 
 
 arbnb_zip_join1 <- setDT(zipdata_bnb)[data.table(airbnb),on = .( bounds_west<=  longitude, bounds_east >=longitude  ,  bounds_north >=latitude, bounds_south <=latitude )]
