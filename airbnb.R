@@ -10,13 +10,34 @@ zip_code_db$state <- sub('.*,\\s*', '', zip_code_db$post_office_city)
 
 zipdata_bnb <-  subset(zip_code_db,major_city %in% airbnb$city) 
 
-zipdata_bnb <- zip_code_db %>% filter(!is.na(bounds_west)) %>% select(-common_city_list,-area_code_list)
+zipdata_bnb1 <- zip_code_db %>% filter(!is.na(bounds_west)) %>% select(-common_city_list,-area_code_list) %>% left_join(state_codes[,c("state_name","state_abbr")],by = c("state" = "state_abbr"))
 
 zipdata_bnb <- zipdata_bnb %>% filter(state %in% bnbstates)
 
 abnb_nozip <- airbnb %>% filter(is.na(neighbourhood))
 
 a_zipcount <- airbnb %>% group_by(city) %>%  summarize(n=n())
+
+
+################################
+CalcDistanceMiles <- function(Lat1, Long1 , Lat2 , Long2) {
+  Lat1 <- format(Lat1,nsmall=5)
+  Long1 <- format(Long1, nsmall= 5)
+  Lat2 <- format(Lat2,nsmall = 5)
+  Long2 <- format(Long2,nsmall = 5)
+  ### convert to radians ###
+
+  Lat1 <- Lat1 / 57.2958
+  Long1 <- Long1 / 57.2958
+  Lat2 <- Lat2 / 57.2958
+  Long2 <- Long2 / 57.2958
+  ## Calc distance
+  distance < (sin(Lat1) * sin(Lat2)) + (cos(Lat1) * cos(Lat2) * cos(Long2 - Long1))
+  ## Convert to miles
+  miles <- ifelse(distance != 0, 3958.75 * Atan(Sqrt(1 - distance**2) / distance), NA)
+  return(miles)
+}
+###########################
 
 
 
@@ -29,6 +50,7 @@ write_labelled_xlsx(zipdata_bnb,file = "C:\\Users\\Dennis\\Desktop\\edx_capstone
 
 boundzips <- USAboundaries::us_zipcodes()
 
+boundzips2 <- st_drop_geometry(boundzips2)
 boundzips2 <- boundzips %>% unnest_wider(geometry)
 
 
