@@ -7,6 +7,8 @@ library(stringr)
 library(latexpdf)
 library(tinytex)
 
+
+
 #Download the data and create train/test sets as per course instructions.
 
 ##########################################################
@@ -66,7 +68,6 @@ edx <- rbind(edx, removed)
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 
-
 ######## Start analysis ########
 
 
@@ -114,15 +115,15 @@ usr_avg <- edx %>%
 pred_usrmov <- validation %>% 
   left_join(movie_avg, by = 'movieId') %>%
   left_join(usr_avg, by = 'userId') %>%
-  mutate(predicted = mu + bi + bu) %>%
-    .$predicted
+  mutate(predictions = mu + bi + bu) %>%
+    .$predictions
 
 #movie& user RMSE
 mov_usr_model <- RMSE(pred_usrmov, validation$rating)
 
 
 #add movie & user to RMSE table
-RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr", RMSE = mov_usr_model ))
+RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr", RMSE = mov_usr_model ))
 
 
 #movie and usr average with tuning parameter, "lambda".
@@ -145,8 +146,8 @@ tuned_rmses <- sapply(lmds, function(l) {
 preds_usrmov <- validation %>% 
   left_join(bi_l, by = 'movieId') %>%
   left_join(bu_l, by = 'userId') %>%
-  mutate(predicted = mu + biL + buL) %>%
-  .$predicted
+  mutate(predictions = mu + biL + buL) %>%
+  .$predictions
 
 
 return(RMSE(preds_usrmov, validation$rating))
@@ -158,7 +159,7 @@ qplot(lmds,tuned_rmses)
 usr_mov_lambda_model <- tuned_rmses[which.min(lmds)]
 
 #add lamba model to RMSE comparison table
-RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
+RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
 
 #analyze number of ratings per user
 usr_rating_cnt <-edx %>% 
@@ -189,15 +190,15 @@ pred_yrmovusr <- validation %>%
   left_join(movie_avg, by = 'movieId') %>%
   left_join(usr_avg, by = 'userId') %>%
   left_join(movie_yr_avg, by = 'year') %>% 
-  mutate(preds = mu + bi + bu + bt) %>%
-  .$preds
+  mutate(predictions = mu + bi + bu + bt) %>%
+  .$predictions
 
 
 #movie, user, and year RMSE
 mov_usr_yr_model <- RMSE(pred_yrmovusr, validation$rating)
 
 #update RMSE table
-RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+year", RMSE = mov_usr_yr_model ))
+RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr+year", RMSE = mov_usr_yr_model ))
 
 #make an aesthetically pleasing table
 RMSE_kable <- knitr::kable(RMSEs)
@@ -208,10 +209,4 @@ RMSE_kable
 
 RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5) 
 
-# mov_lm <- lm(rating ~ userId + movieId + timestamp , data = edx)
-# 
-# vali_lm_rmse <- RMSE(obs = validation$rating,  pred = predict(mov_lm,validation))
-# 
-# mov_glm <- glm(rating ~ userId + movieId + timestamp , data = edx)
-# 
-# vali_glm_rmse <- RMSE(obs = validation$rating,  pred = predict(mov_glm,validation))
+
