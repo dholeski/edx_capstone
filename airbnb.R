@@ -4,8 +4,10 @@ library(tidyverse)
 library(data.table)
 library(sf)
 library(USAboundaries)
+library(geosphere)
+library(zipcodeR)
+library(caret)
 
-write_csv(Us_blockgroups, 'C:\\Users\\Dennis\\Desktop\\edx_capstone\\us_blockgroups.csv')
 
 data('zip_code_db')
 data('state.x77')
@@ -180,3 +182,10 @@ sf_zipbounds<- sf::st_set_geometry(sf_zipbounds,value = sf_zipbounds$zip_code_ge
 
 
 Us_blockgroups <- bq_table_download(bq_project_query(billing,"SELECT *  FROM bigquery-public-data.geo_census_blockgroups.us_blockgroups_national where state_fips_code IN ('06','08','09','11','12','15','17','22','25','27','32','34','36','37','39','41','44','47','48','53','55')"),max_results = Inf,quiet = FALSE)
+
+write_csv(Us_blockgroups, 'C:\\Users\\Dennis\\Desktop\\edx_capstone\\us_blockgroups.csv')
+
+Us_censtracts <- bq_table_download(bq_project_query(billing,"SELECT * FROM bigquery-public-data.geo_census_tracts.us_census_tracts_national where state_fips_code IN ('06','08','09','11','12','15','17','22','25','27','32','34','36','37','39','41','44','47','48','53','55')"),max_results = Inf,quiet = FALSE)
+
+write_csv(Us_censtracts, 'C:\\Users\\Dennis\\Desktop\\edx_capstone\\us_centracts.csv')
+
