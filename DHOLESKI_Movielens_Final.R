@@ -86,10 +86,6 @@ movie_avg <- edx %>%
   summarize(bi = mean(rating - mu),n_mov_rat = n())
 
 
-#extract movie release year
-movie_yr <- edx %>%
-  group_by(movieId) %>%
-  summarize(year = as.factor(str_sub(first(title),-5,-2)))
 
 #predict movie effect
 pred_moveffect <- mu + validation %>% 
@@ -102,6 +98,11 @@ mov_only_model <- RMSE(pred_moveffect, validation$rating)
 
 #add movie only RMSE to RMSE table
 RMSEs <- bind_rows(RMSEs, data.frame(model = "movie_effect", RMSE = mov_only_model))
+
+#extract movie release year
+movie_yr <- edx %>%
+  group_by(movieId) %>%
+  summarize(year = as.factor(str_sub(first(title),-5,-2)))
 
 #user average
 usr_avg <- edx %>% 
