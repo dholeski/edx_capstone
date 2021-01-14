@@ -5,10 +5,7 @@ if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.
 library(tidyverse)
 library(caret)
 library(data.table)
-library(knitr)
-library(stringr)
-library(latexpdf)
-library(tinytex)
+
 
 
 

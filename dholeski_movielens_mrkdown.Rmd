@@ -13,13 +13,14 @@ knitr::opts_chunk$set(echo = TRUE, fig.align = 'left')
 edx <- readRDS("C:\\Users\\Dennis\\Desktop\\edx_capstone\\edx.rds")
 validation <- readRDS("C:\\Users\\Dennis\\Desktop\\edx_capstone\\validation.rds")
 ```
+
+
+
 **INTRODUCTION**
 
-This analysis attempts to create a movie recommendation system using public movie and rating data from GroupLens. This specific dataset contains 10 million observations consisting of 100,000 tag applications applied to 10,000 movies by 72,000 users. Both
+This analysis attempts to create a movie recommendation system using public movie and rating data from GroupLens. This specific dataset contains 10 million observations consisting of 100,000 tag applications applied to 10,000 movies by 72,000 users. An ideal algorithm will produce a low RMSE relative to the ratings system ranked 1 through 5. Our goal is to be below **0.86500**.
 
 
-
-Load packages
 ```{r load packages, message=FALSE, echo=FALSE}
 #load packages
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
@@ -31,17 +32,10 @@ library(caret)
 library(data.table)
 ```
 
-```{r eval=FALSE, include=FALSE}
-#left these packages in after resolving technical issues to avoid potentially reoccurring issues.
-library(knitr)
-library(stringr)
-library(latexpdf)
-library(tinytex)
-```
 
 
-Download the data and create train/test sets as per course instructions. This was copied and pasted from the assignment, ensuring accuracy of datasets. This would be the initial step for pre-processing and cleaning the data.
-```{r eval=FALSE, include=FALSE}
+The data will be downloaded and train/test sets will be created as per course instructions. This was copied and pasted from the assignment, ensuring accuracy of datasets. This would be the initial step for pre-processing and cleaning the data.
+```{r download data, echo=TRUE, message=FALSE, warning=FALSE}
 ##########################################################
 # Create edx set, validation set (final hold-out test set)
 ##########################################################
@@ -97,7 +91,6 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 **METHODS/ANALYSIS**
 The approach in this analysis started with the mean rating only, and increasingly added other features to improve results. The features selected were the mean ratings of users, movies, release years, and timestamps. Regularization was implemented with various ranges of lambda. Data distribution was visualized to ensure model integrity.
-
 
 Linear models were also attempted, on both of the full datasets and within specified quantiles of users' number of ratings. For demonstration, a lower quantile of 30 was decided on. Not shown here, other values of quantiles were attempted with unimproved results. Including the timestamp feature was also attempted in the linear models, however was removed when it failed to improve the model. This was mainly done to provide a clear analysis and to avoid causing any performance issues when the script is executed.
 
@@ -204,7 +197,7 @@ qplot(lmds,tuned_rmses)
 ```
 
 Choose the lamba with the lowest RMSE and add that model to the comparison table.
-```{r message=FALSE}
+```{r message=FALSE, warning=FALSE}
 #tuned rmse model with lowest lamda
 usr_mov_lambda_model <- tuned_rmses[which.min(lmds)]
 
@@ -213,7 +206,7 @@ RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+lambda", RMSE = usr_mov_l
 ```
 
 Analyze the distribution of the user rating counts to identify possible anomalies that could affect the model
-```{r message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #number of ratings per user
 usr_rating_cnt <-edx %>% 
   group_by(userId) %>%
@@ -228,7 +221,7 @@ usr_rating_cnt %>% ggplot(aes(user_ratings)) + geom_histogram(binwidth = 10) +  
 
 
 Verify that the distribution for records per year rated is reasonable, attempting to identify any anomalies to ensure model accuracy.
-```{r message=FALSE}
+```{r message=FALSE, warning=FALSE}
 #visualize the distribution of number of records per year the movie was rated
 edx %>% mutate(year_rated = format(as.POSIXct(.$timestamp,origin = "1970-01-01",tz = "UTC"),"%Y")) %>% ggplot(aes(year_rated)) + geom_histogram(stat = "count") 
 ```
@@ -284,7 +277,7 @@ prd_lm <-  predict(fit_lm, validation)
 
 lm_rmse <- RMSE(pred = prd_lm, obs = validation$rating)
 
-lm_RMSEs <- bind_rows(lm_lm_RMSEs,data.frame(model = "Linear Model", RMSE = lm_rmse ))
+lm_RMSEs <- bind_rows(lm_RMSEs,data.frame(model = "Linear Model", RMSE = lm_rmse ))
 
 ```
 **RESULTS**
@@ -293,7 +286,9 @@ The table below outlines the analyzed models and their respective RMSE results. 
 
 The linear models' results are also displayed below in the lower table. These methods did not produce significant results. This held true even with the addition of several features and also removing lower quantiles of the number of ratings for the respective users.
 
-```{r tables, echo=FALSE, message=FALSE}
+
+/newpage
+```{r rmse table, echo=FALSE, message=FALSE}
 #make an aesthetically pleasing RMSE Table
 knitr::kable(RMSEs)
 
@@ -305,8 +300,8 @@ RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") 
 ```
 
 
-
-```{r tables, echo=FALSE, message=FALSE}
+/newpage
+```{r lm table, message=FALSE,echo=FALSE}
 #make an aesthetically pleasing linear model RMSE Table
 knitr::kable(lm_RMSEs)
 
