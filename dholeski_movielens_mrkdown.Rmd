@@ -1,19 +1,47 @@
+---
+title: "MovieLens RMSE Analysis"
+date: "2020-11-12"
+author: "Dennis Holeski"
+output: pdf_document
+---
+
+```{r setup, include=FALSE }
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'left')
+```
+
+```{r echo=FALSE}
+edx <- readRDS("C:\\Users\\Dennis\\Desktop\\edx_capstone\\edx.rds")
+validation <- readRDS("C:\\Users\\Dennis\\Desktop\\edx_capstone\\validation.rds")
+```
+**INTRODUCTION**
+
+This analysis attempts to create a movie recommendation system using public movie and rating data from GroupLens. This specific dataset contains 10 million observations consisting of 100,000 tag applications applied to 10,000 movies by 72,000 users. Both
+
+
+
+Load packages
+```{r load packages, message=FALSE, echo=FALSE}
 #load packages
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
 library(tidyverse)
 library(caret)
 library(data.table)
+```
+
+```{r eval=FALSE, include=FALSE}
+#left these packages in after resolving technical issues to avoid potentially reoccurring issues.
 library(knitr)
 library(stringr)
 library(latexpdf)
 library(tinytex)
+```
 
 
-
-#Download the data and create train/test sets as per course instructions.
-
+Download the data and create train/test sets as per course instructions. This was copied and pasted from the assignment, ensuring accuracy of datasets. This would be the initial step for pre-processing and cleaning the data.
+```{r eval=FALSE, include=FALSE}
 ##########################################################
 # Create edx set, validation set (final hold-out test set)
 ##########################################################
@@ -41,12 +69,10 @@ ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings
 movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
 colnames(movies) <- c("movieId", "title", "genres")
 
-
 # if using R 4.0 or later:
 movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
-                                           title = as.character(title),
-                                           genres = as.character(genres))
-
+                                            title = as.character(title),
+                                            genres = as.character(genres))
 
 movielens <- left_join(ratings, movies, by = "movieId")
 
@@ -58,8 +84,8 @@ temp <- movielens[test_index,]
 
 # Make sure userId and movieId in validation set are also in edx set
 validation <- temp %>% 
-  semi_join(edx, by = "movieId") %>%
-  semi_join(edx, by = "userId")
+      semi_join(edx, by = "movieId") %>%
+      semi_join(edx, by = "userId")
 
 # Add rows removed from validation set back into edx set
 removed <- anti_join(temp, validation)
@@ -67,10 +93,19 @@ edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
+```
 
-######## Start analysis ########
+**METHODS/ANALYSIS**
+The approach in this analysis started with the mean rating only, and increasingly added other features to improve results. The features selected were the mean ratings of users, movies, release years, and timestamps. Regularization was implemented with various ranges of lambda. Data distribution was visualized to ensure model integrity.
 
 
+Linear models were also attempted, on both of the full datasets and within specified quantiles of users' number of ratings. For demonstration, a lower quantile of 30 was decided on. Not shown here, other values of quantiles were attempted with unimproved results. Including the timestamp feature was also attempted in the linear models, however was removed when it failed to improve the model. This was mainly done to provide a clear analysis and to avoid causing any performance issues when the script is executed.
+
+
+
+
+Start analysis, beginning with the mean rating only. Then create the RMSE comparison table that will be updated after each RMSE is predicted predicted.
+```{r message=FALSE}
 #average rating of edx ratings
 mu <- mean(edx$rating)
 
@@ -79,12 +114,14 @@ avgonly <- RMSE(validation$rating,mu)
 
 #create RMSE table
 RMSEs <- data.frame(model = "avg_only", RMSE = avgonly)
+```
 
+Prediction based on movie-only grouping.
+```{r message=FALSE}
 #movie average rating
 movie_avg <- edx %>% 
   group_by(movieId) %>% 
   summarize(bi = mean(rating - mu),n_mov_rat = n())
-
 
 
 #predict movie effect
@@ -98,12 +135,18 @@ mov_only_model <- RMSE(pred_moveffect, validation$rating)
 
 #add movie only RMSE to RMSE table
 RMSEs <- bind_rows(RMSEs, data.frame(model = "movie_effect", RMSE = mov_only_model))
+```
 
-#extract movie release year
+Extract movie year release for future analysis.
+```{r message=FALSE}
+#extract movie year release
 movie_yr <- edx %>%
   group_by(movieId) %>%
   summarize(year = as.factor(str_sub(first(title),-5,-2)))
+```
 
+Movie and user prediction
+```{r message=FALSE}
 #user average
 usr_avg <- edx %>% 
   left_join(movie_avg, by = 'movieId') %>%
@@ -111,22 +154,22 @@ usr_avg <- edx %>%
   summarize(bu = mean(rating - mu - bi),n_usr_rat = n())
 
 
-
 #movie and user prediction
 pred_usrmov <- validation %>% 
   left_join(movie_avg, by = 'movieId') %>%
   left_join(usr_avg, by = 'userId') %>%
-  mutate(predictions = mu + bi + bu) %>%
-    .$predictions
+  mutate(predicted = mu + bi + bu) %>%
+    .$predicted
 
-#movie& user RMSE
+#movie & user RMSE
 mov_usr_model <- RMSE(pred_usrmov, validation$rating)
-
 
 #add movie & user to RMSE table
 RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr", RMSE = mov_usr_model ))
+```
 
-
+Perform analysis on movie + user with regularization. Started with a larger range of lambdas 'seq(0,12, .5)', however I was able to improve the RMSE by narrowing my regularization parameter. 
+```{r echo=TRUE, message=FALSE}
 #movie and usr average with tuning parameter, "lambda".
 #started with larger lambas and narrowed it down to improve RMSE.
 #lmds <- seq(0,12, .5)
@@ -147,22 +190,31 @@ tuned_rmses <- sapply(lmds, function(l) {
 preds_usrmov <- validation %>% 
   left_join(bi_l, by = 'movieId') %>%
   left_join(bu_l, by = 'userId') %>%
-  mutate(predictions = mu + biL + buL) %>%
-  .$predictions
+  mutate(predicted = mu + biL + buL) %>%
+  .$predicted
 
 
 return(RMSE(preds_usrmov, validation$rating))
 })
+```
 
+Plot RMSE vs Lambdas
+```{r echo=FALSE}
 qplot(lmds,tuned_rmses)
+```
 
+Choose the lamba with the lowest RMSE and add that model to the comparison table.
+```{r message=FALSE}
 #tuned rmse model with lowest lamda
 usr_mov_lambda_model <- tuned_rmses[which.min(lmds)]
 
 #add lamba model to RMSE comparison table
-RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
+RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
+```
 
-#analyze number of ratings per user
+Analyze the distribution of the user rating counts to identify possible anomalies that could affect the model
+```{r message=FALSE}
+#number of ratings per user
 usr_rating_cnt <-edx %>% 
   group_by(userId) %>%
   summarize(user_ratings = n())
@@ -172,10 +224,17 @@ quantile(usr_rating_cnt$user_ratings)
 
 #visualize the distribution of the rating counts per user, removing outliers (100th percentile)
 usr_rating_cnt %>% ggplot(aes(user_ratings)) + geom_histogram(binwidth = 10) +  xlim(0,quantile(usr_rating_cnt$user_ratings,.99))
+```
 
+
+Verify that the distribution for records per year rated is reasonable, attempting to identify any anomalies to ensure model accuracy.
+```{r message=FALSE}
 #visualize the distribution of number of records per year the movie was rated
 edx %>% mutate(year_rated = format(as.POSIXct(.$timestamp,origin = "1970-01-01",tz = "UTC"),"%Y")) %>% ggplot(aes(year_rated)) + geom_histogram(stat = "count") 
+```
 
+Further analysis on the movie release year.
+```{r movie year release, message=FALSE}
 #rating aggregated by movie year
 movie_yr_avg <- edx %>%
   left_join(movie_avg, by = 'movieId') %>%
@@ -191,33 +250,18 @@ pred_yrmovusr <- validation %>%
   left_join(movie_avg, by = 'movieId') %>%
   left_join(usr_avg, by = 'userId') %>%
   left_join(movie_yr_avg, by = 'year') %>% 
-  mutate(predictions = mu + bi + bu + bt) %>%
-  .$predictions
+  mutate(preds = mu + bi + bu + bt) %>%
+  .$preds
 
 
 #movie, user, and year RMSE
 mov_usr_yr_model <- RMSE(pred_yrmovusr, validation$rating)
 
 #update RMSE table
-RMSEs <- bind_rows(RMSEs,data.frame(model = "movie+usr+year", RMSE = mov_usr_yr_model ))
+RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+year", RMSE = mov_usr_yr_model ))
+```
 
-#make an aesthetically pleasing table
-RMSE_kable <- knitr::kable(RMSEs)
-
-RMSE_kable
-
-
-RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5) 
-
-
-#make an aesthetically pleasing linear model RMSE Table
-lmRMSE_kable <- knitr::kable(lm_RMSEs)
-
-lmRMSE_kable
-
-RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5)
-
-
+```{r linear regression, message=FALSE}
 #group datasets by user ratings to eliminate values less than the 30th quantile.
 edx_usr_30qnt <- edx %>% group_by(userId) %>% mutate(num_user_ratings = n()) %>% ungroup() %>% filter(num_user_ratings > quantile(num_user_ratings, 0.30))
 
@@ -242,5 +286,39 @@ lm_rmse <- RMSE(pred = prd_lm, obs = validation$rating)
 
 lm_RMSEs <- bind_rows(lm_lm_RMSEs,data.frame(model = "Linear Model", RMSE = lm_rmse ))
 
+```
+**RESULTS**
+
+The table below outlines the analyzed models and their respective RMSE results. The graph shows a visual representation of how the RMSE was changed with the different models. Improvements were seen as features were added, however improvements quickly tapered off as the numbers of features increased. The best model included the regularization of user and movie features with the lowest end resulting RMSE of **0.864982**. This is an accepted result and should perform well as a basic use algorithm. 
+
+The linear models' results are also displayed below in the lower table. These methods did not produce significant results. This held true even with the addition of several features and also removing lower quantiles of the number of ratings for the respective users.
+
+```{r tables, echo=FALSE, message=FALSE}
+#make an aesthetically pleasing RMSE Table
+knitr::kable(RMSEs)
 
 
+```
+
+```{r RMSE graph, echo=FALSE, message=FALSE}
+RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5)
+```
+
+
+
+```{r tables, echo=FALSE, message=FALSE}
+#make an aesthetically pleasing linear model RMSE Table
+knitr::kable(lm_RMSEs)
+
+
+```
+
+```{r linear model RMSE graph, echo=FALSE, message=FALSE}
+RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5)
+```
+
+
+
+**CONCLUSION**
+
+This completed RMSE table shows that the best RMSE is from the movie + user with regularization model. Interestingly enough, adding the year that the movie was released as a predictor showed that the RMSE was minimally affected, actually causing a slight increase. This was further proof of what I had learned in the course that adding additional predictors does not mean you will gain improvements on your model. While the best model produced an acceptable result, I believe there is room for improvement. Further development would most likely include more complex algorithms and ensembles. I would also include a breakdown and analysis of the individual genres.
