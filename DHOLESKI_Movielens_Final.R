@@ -237,7 +237,7 @@ prd_lm <-  predict(fit_lm, validation)
 
 lm_rmse <- RMSE(pred = prd_lm, obs = validation$rating)
 
-lm_RMSEs <- bind_rows(lm_lm_RMSEs,data.frame(model = "Linear Model", RMSE = lm_rmse ))
+lm_RMSEs <- bind_rows(lm_RMSEs,data.frame(model = "Linear Model", RMSE = lm_rmse ))
 
 
 

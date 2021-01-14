@@ -21,7 +21,7 @@ validation <- readRDS("C:\\Users\\Dennis\\Desktop\\edx_capstone\\validation.rds"
 This analysis attempts to create a movie recommendation system using public movie and rating data from GroupLens. This specific dataset contains 10 million observations consisting of 100,000 tag applications applied to 10,000 movies by 72,000 users. An ideal algorithm will produce a low RMSE relative to the ratings system ranked 1 through 5. Our goal is to be below **0.86500**.
 
 
-```{r load packages, message=FALSE, echo=FALSE}
+```{r load packages, echo=TRUE, message=FALSE}
 #load packages
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
@@ -35,7 +35,7 @@ library(data.table)
 
 
 The data will be downloaded and train/test sets will be created as per course instructions. This was copied and pasted from the assignment, ensuring accuracy of datasets. This would be the initial step for pre-processing and cleaning the data.
-```{r download data, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+```{r download data, echo=TRUE, message=FALSE, warning=FALSE}
 ##########################################################
 # Create edx set, validation set (final hold-out test set)
 ##########################################################
