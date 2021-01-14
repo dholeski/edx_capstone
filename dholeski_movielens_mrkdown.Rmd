@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE }
-knitr::opts_chunk$set(echo = TRUE, fig.align = 'left')
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'left',results='asis')
 ```
 
 ```{r echo=FALSE}
@@ -35,7 +35,7 @@ library(data.table)
 
 
 The data will be downloaded and train/test sets will be created as per course instructions. This was copied and pasted from the assignment, ensuring accuracy of datasets. This would be the initial step for pre-processing and cleaning the data.
-```{r download data, echo=TRUE, message=FALSE, warning=FALSE}
+```{r download data, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 ##########################################################
 # Create edx set, validation set (final hold-out test set)
 ##########################################################
@@ -205,6 +205,7 @@ usr_mov_lambda_model <- tuned_rmses[which.min(lmds)]
 RMSEs <- bind_rows(RMSEs,data_frame(model = "movie+usr+lambda", RMSE = usr_mov_lambda_model))
 ```
 
+\pagebreak
 Analyze the distribution of the user rating counts to identify possible anomalies that could affect the model
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #number of ratings per user
@@ -213,13 +214,13 @@ usr_rating_cnt <-edx %>%
   summarize(user_ratings = n())
 
 #analyze percentiles of rating counts per user
-quantile(usr_rating_cnt$user_ratings)
+knitr::kable(quantile(usr_rating_cnt$user_ratings),caption =  'number of ratings vs. quantile')
 
 #visualize the distribution of the rating counts per user, removing outliers (100th percentile)
 usr_rating_cnt %>% ggplot(aes(user_ratings)) + geom_histogram(binwidth = 10) +  xlim(0,quantile(usr_rating_cnt$user_ratings,.99))
 ```
 
-
+\pagebreak
 Verify that the distribution for records per year rated is reasonable, attempting to identify any anomalies to ensure model accuracy.
 ```{r message=FALSE, warning=FALSE}
 #visualize the distribution of number of records per year the movie was rated
@@ -287,11 +288,10 @@ The table below outlines the analyzed models and their respective RMSE results. 
 The linear models' results are also displayed below in the lower table. These methods did not produce significant results. This held true even with the addition of several features and also removing lower quantiles of the number of ratings for the respective users.
 
 
-/newpage
+\pagebreak
 ```{r rmse table, echo=FALSE, message=FALSE}
 #make an aesthetically pleasing RMSE Table
 knitr::kable(RMSEs)
-
 
 ```
 
@@ -300,16 +300,15 @@ RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") 
 ```
 
 
-/newpage
+\pagebreak
 ```{r lm table, message=FALSE,echo=FALSE}
 #make an aesthetically pleasing linear model RMSE Table
 knitr::kable(lm_RMSEs)
 
-
 ```
 
 ```{r linear model RMSE graph, echo=FALSE, message=FALSE}
-RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5)
+lm_RMSEs %>% arrange(RMSE) %>% ggplot(aes(model,RMSE))  + geom_col(color = "gray") + geom_text(aes(label = round(RMSE,6)),color = "white", vjust = 1.5)
 ```
 
 
