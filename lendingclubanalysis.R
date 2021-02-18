@@ -19,11 +19,13 @@ accept_lc <- readRDS('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\accept
 #fedrates <- read_csv('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\fed-funds-rate-historical-chart.csv',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990)
 
 #download historical fed rates from kaggle.
-fedrates <- read_csv("https://storage.googleapis.com/kagglesdsdata/datasets/1166232/1953977/fed-funds-rate-historical-chart.csv?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20210218%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20210218T004044Z&X-Goog-Expires=259199&X-Goog-SignedHeaders=host&X-Goog-Signature=3af56bc0f190fc6b6102495fd3c5afbf79fa714350fc68ab4a8fc02e011218c259c63cdb3918c01996e4cf3954464bffcbad534ec5d2be0fa3e67e311bd2e1b4e94013fb0f727a9d7a1310d26cf8ef1aa6242be28499da0a9012695e4c1b372e78bb315cc632a5c971bb1201aa1c61aa898c0861f24654abbd82a0391990691ddc2bfa03e48a4ea8cfae3f003725eb2bbd058530f86c399449c9575f3ed885ffca52a278d47fc110448623bb1bedecb7cb07ec33a8101f008f4b55f03ce8b3019cb2ef7039250ed2b4e9cc792562d123c34673348a00dd430813273956d1c34bca904206a3b9f3c648682ac9e6459c0f09dc221201a9d423596b861a8fea959d",col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990)
+fedrates <- read_csv('https://storage.googleapis.com/kagglesdsdata/datasets/1166232/1953977/fed-funds-rate-historical-chart.csv?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20210218%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20210218T004044Z&X-Goog-Expires=259199&X-Goog-SignedHeaders=host&X-Goog-Signature=3af56bc0f190fc6b6102495fd3c5afbf79fa714350fc68ab4a8fc02e011218c259c63cdb3918c01996e4cf3954464bffcbad534ec5d2be0fa3e67e311bd2e1b4e94013fb0f727a9d7a1310d26cf8ef1aa6242be28499da0a9012695e4c1b372e78bb315cc632a5c971bb1201aa1c61aa898c0861f24654abbd82a0391990691ddc2bfa03e48a4ea8cfae3f003725eb2bbd058530f86c399449c9575f3ed885ffca52a278d47fc110448623bb1bedecb7cb07ec33a8101f008f4b55f03ce8b3019cb2ef7039250ed2b4e9cc792562d123c34673348a00dd430813273956d1c34bca904206a3b9f3c648682ac9e6459c0f09dc221201a9d423596b861a8fea959d',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990) 
+
+fedrates <- data.table(fedrates)
 
 names(fedrates)[names(fedrates)=='value'] <- 'fed_rate'
 
-#clean dataset and remove irrelavent columns.
+#clean dataset and remove irrelavent columns. AVERAGE CREDIT PROCESSING IS 30 DAYS
 accepted_lc <- accept_lc %>% select(-member_id,-desc,-url,-mths_since_last_delinq,-mths_since_last_record,-next_pymnt_d,-mths_since_last_major_derog,-dti_joint,-annual_inc_joint,-verification_status_joint,-mths_since_recent_revol_delinq,-purpose,-title,-revol_bal_joint,-emp_title,-c(116:144)) %>% 
   mutate(issue_d = parse_date_time(issue_d, orders = 'Ymd HMS')) %>% filter(
     issue_d >= '2012-1-1' &
@@ -57,9 +59,13 @@ accepted_lc <- accept_lc %>% select(-member_id,-desc,-url,-mths_since_last_delin
     fico_low_zscore = (last_fico_range_low - mean(last_fico_range_low, na.rm = TRUE)) / sd(last_fico_range_low, na.rm = TRUE)
   )
 
-accepted_lc <- left_join(accepted_lc,fedrates,copy=FALSE,by=c('thrtyDaysB4Issue_d' = 'date')) 
+accepted_lc_rate <- left_join(accepted_lc,fedrates,copy=FALSE,by=c('thrtyDaysB4Issue_d' = 'date'))
 
-accepted_lc <- accepted_lc %>% filter(!is.na(fed_rate))
+setDT(accepted_lc)[,join_date := thrtyDaysB4Issue_d]
+setDT(fedrates)[,join_date := date]
+accepted_lc_rate <- accepted_lc[fedrates, on = .(thrtyDaysB4Issue_d = date),roll = 'nearest']
+
+accepted_lc_rate <- accepted_lc_rate %>% filter(!is.na(fed_rate))
 
 set.seed(1,sample.kind = 'Rounding')
 train_index <- createDataPartition(accepted_lc$loan_status, p=0.8, list=FALSE)
@@ -67,7 +73,7 @@ train_set <- accepted_lc[train_index,]
 test_set <- accepted_lc[-train_index,]
 
 
-##logistic regression
+##logistic regression, binomial
 glm_chrgoff <- train_set %>% mutate(y=as.numeric(charge_off_fctr == 1)) %>% glm(y~int_rate+dti+term_months+last_fico_range_low+fed_rate, data = . , family = 'binomial')
 
 
