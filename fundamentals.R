@@ -1,7 +1,6 @@
 library(tidyverse)
 library(jsonlite)
 library(data.table)
-library(fuzzyjoin)
 
 finmodprepAPI <- 'c4ff7413dae8e0f35450dba77c2a2e51'
 
@@ -11,15 +10,9 @@ exchanges <- c('NYSE', 'Nasdaq Global Select', 'New York Stock Exchange', 'Nasda
 
 colnames(fortune500list)[colnames(fortune500list) == 'Revenues (millions)'] <- 'Revenue_Millions'
 
-fortune500list$Revenue_Millions <- as.numeric(gsub("\\$", "", fortune500list$Revenue_Millions))
+SP_symbols <- unique(SP500Merged$symbol)
 
-avail <- avail_symbs[avail_symbs$exchange %in% exchanges,]
 
-f500 <- stringdist_inner_join(avail,fortune500list, by=c("name" = "Company"))
-
-avail <- avail[!apply(is.na(avail) | avail == " ", 1, all),]
-
-write.csv(avail_symbs, 'C:/Users/Dennis/Desktop/edx_capstone/avail_symb')
 
 daily_dcf <-  read_json(paste('https://financialmodelingprep.com/api/v3/historical-daily-discounted-cash-flow/',symbols,'?limit=100&apikey=c4ff7413dae8e0f35450dba77c2a2e51',sep = ' '),simplifyVector = TRUE)
 
@@ -52,3 +45,13 @@ for (i in symbols) {
 }
 
 big_data = do.call(rbind, datalist)
+
+for (i in SP_symbols) {
+  # ... make some data
+  incStm <- read_json(
+    paste('https://financialmodelingprep.com/api/v3/income-statement-growth/',i,'?limit=40&apikey=c4ff7413dae8e0f35450dba77c2a2e51', sep = '')
+    ,simplifyVector = TRUE)
+  datalist[[i]] <- incStm # add it to your list
+}
+
+big_income_data <- do.call(rbind, datalist)
