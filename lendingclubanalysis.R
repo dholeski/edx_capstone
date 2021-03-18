@@ -7,8 +7,10 @@ library(randomForest)
 library(readr)
 library(lubridate)
 library(Rborist)
+library(FactoMineR)
 
 ##accept_lc <- read_csv('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\lc_accepted_clean.csv',col_types = cols(member_id = col_skip(), desc = col_skip(), zip_code = col_skip()))
+
 
 accept_lc <- fread('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\lc_accepted_clean.csv')
 # 
@@ -19,13 +21,15 @@ accept_lc <- readRDS('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\accept
 #fedrates <- read_csv('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\fed-funds-rate-historical-chart.csv',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990)
 
 #download historical fed rates from kaggle.
-fedrates <- read_csv('https://storage.googleapis.com/kagglesdsdata/datasets/1166232/1953977/fed-funds-rate-historical-chart.csv?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20210218%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20210218T004044Z&X-Goog-Expires=259199&X-Goog-SignedHeaders=host&X-Goog-Signature=3af56bc0f190fc6b6102495fd3c5afbf79fa714350fc68ab4a8fc02e011218c259c63cdb3918c01996e4cf3954464bffcbad534ec5d2be0fa3e67e311bd2e1b4e94013fb0f727a9d7a1310d26cf8ef1aa6242be28499da0a9012695e4c1b372e78bb315cc632a5c971bb1201aa1c61aa898c0861f24654abbd82a0391990691ddc2bfa03e48a4ea8cfae3f003725eb2bbd058530f86c399449c9575f3ed885ffca52a278d47fc110448623bb1bedecb7cb07ec33a8101f008f4b55f03ce8b3019cb2ef7039250ed2b4e9cc792562d123c34673348a00dd430813273956d1c34bca904206a3b9f3c648682ac9e6459c0f09dc221201a9d423596b861a8fea959d',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990) 
-
-fedrates <- data.table(fedrates)
+fedrates <- read_csv('https://raw.githubusercontent.com/dholeski/edx_capstone/main/fed-funds-rate-historical-chart_Mar2021.csv',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990 & !is.na(value) )
 
 names(fedrates)[names(fedrates)=='value'] <- 'fed_rate'
 
-#clean dataset and remove irrelavent columns. AVERAGE CREDIT PROCESSING IS 30 DAYS
+fedrates <- data.table(fedrates) %>% mutate(fed_rate = fed_rate / 100, date = date(date))
+
+
+
+#clean dataset and remove irrelevant columns. Average credit processing is 30 DAYS in the United States. 
 accepted_lc <- accept_lc %>% select(-member_id,-desc,-url,-mths_since_last_delinq,-mths_since_last_record,-next_pymnt_d,-mths_since_last_major_derog,-dti_joint,-annual_inc_joint,-verification_status_joint,-mths_since_recent_revol_delinq,-purpose,-title,-revol_bal_joint,-emp_title,-c(116:144)) %>% 
   mutate(issue_d = parse_date_time(issue_d, orders = 'Ymd HMS')) %>% filter(
     issue_d >= '2012-1-1' &
@@ -52,25 +56,32 @@ accepted_lc <- accept_lc %>% select(-member_id,-desc,-url,-mths_since_last_delin
     last_pymnt_d = parse_date_time(last_pymnt_d, orders = 'Ymd HMS'),
     last_credit_pull_d = parse_date_time(last_credit_pull_d, orders = 'Ymd HMS'),
     policy_code = as.factor(policy_code),
-    dti_ovr_36 = as.factor(ifelse(dti > 36, 1, 0)),
+    dti_ovr_36 = as.factor(ifelse(dti > .36, 1, 0)),
     annual_debt = annual_inc * dti,
     issue_year = year(issue_d),
     lngth_credit_mnths = (issue_d - earliest_cr_line) / 365 * 12,
     fico_low_zscore = (last_fico_range_low - mean(last_fico_range_low, na.rm = TRUE)) / sd(last_fico_range_low, na.rm = TRUE)
   )
 
-accepted_lc_rate <- left_join(accepted_lc,fedrates,copy=FALSE,by=c('thrtyDaysB4Issue_d' = 'date'))
+#accepted_lc_rate <- left_join(accepted_lc,fedrates,copy=FALSE,by=c('thrtyDaysB4Issue_d' = 'date'))
 
-setDT(accepted_lc)[,join_date := thrtyDaysB4Issue_d]
-setDT(fedrates)[,join_date := date]
-accepted_lc_rate <- accepted_lc[fedrates, on = .(thrtyDaysB4Issue_d = date),roll = 'nearest']
+#join on nearest fed rates from 30 days prior of loan issuance
+accepted_lc_rate <- fedrates[accepted_lc, on = .(date = thrtyDaysB4Issue_d),roll = 'nearest']
 
 accepted_lc_rate <- accepted_lc_rate %>% filter(!is.na(fed_rate))
+accepted_lc_rate$fed_rate <- format(accepted_lc_rate$fed_rate /100,nsmall = 5)
 
+p_chargeoffs <- mean(accepted_lc_rate$charge_off_fctr == 1)
+cor(accepted_lc_rate$int_rate, accepted_lc_rate$fed_rate)
+mean(accepted_lc_rate)
+
+accepted_lc_rate %>% ggplot(aes(x=date, y=fed_rate, color = charge_off_fctr)) + geom_point() 
+#---------------
+#start analysis
 set.seed(1,sample.kind = 'Rounding')
 train_index <- createDataPartition(accepted_lc$loan_status, p=0.8, list=FALSE)
-train_set <- accepted_lc[train_index,]
-test_set <- accepted_lc[-train_index,]
+edx <- accepted_lc[train_index,]
+validation <- accepted_lc[-train_index,]
 
 
 ##logistic regression, binomial
