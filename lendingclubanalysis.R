@@ -1,5 +1,13 @@
-<<<<<<< HEAD
 ## lending club data
+
+if ( !require( tidyverse )) install.packages( "tidyverse")
+if ( !require( data.table )) install.packages( "data.table")
+if ( !require( caret )) install.packages( "caret")
+if ( !require( randomForest )) install.packages( "randomForest")
+if ( !require( readr )) install.packages( "readr")
+if ( !require( lubridate )) install.packages( "lubridate")
+if ( !require( Rborist )) install.packages( "Rborist")
+if ( !require( FactoMineR )) install.packages( "FactoMineR")
 
 library(tidyverse)
 library(data.table)
@@ -9,6 +17,8 @@ library(readr)
 library(lubridate)
 library(Rborist)
 library(FactoMineR)
+
+options(digits = 3,scipen = 4)
 
 ##accept_lc <- read_csv('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\lc_accepted_clean.csv',col_types = cols(member_id = col_skip(), desc = col_skip(), zip_code = col_skip()))
 
@@ -21,13 +31,14 @@ accept_lc <- readRDS('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\accept
 
 #fedrates <- read_csv('C:\\Users\\Dennis\\Desktop\\edx_capstone\\lendclub\\fed-funds-rate-historical-chart.csv',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990)
 
-#download historical fed rates from kaggle.
+#download historical fed rates from github.
 fedrates <- read_csv('https://raw.githubusercontent.com/dholeski/edx_capstone/main/fed-funds-rate-historical-chart_Mar2021.csv',col_types = cols(date = col_date(format = "%m/%d/%Y"),value = col_double())) %>% filter(year(date) >= 1990 & !is.na(value) )
 
 names(fedrates)[names(fedrates)=='value'] <- 'fed_rate'
 
-fedrates <- data.table(fedrates) %>% mutate(fed_rate = fed_rate / 100, date = date(date))
+fedrates <- data.table(fedrates) %>% mutate(fed_rate = fed_rate / 100, date = date(date),FOM = floor_date(date, 'month'))
 
+fedrates_mnth <- fedrates %>% group_by(FOM) %>% summarize(avg_rate = mean(fed_rate)) 
 
 
 #clean dataset and remove irrelevant columns. Average credit processing is 30 DAYS in the United States. 
